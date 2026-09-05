@@ -1,0 +1,11 @@
+{
+  "name": "ecies-js",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone single-file ECIES implementation",
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test"
+  }
+}

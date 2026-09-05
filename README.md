@@ -45,16 +45,17 @@ Supported options:
 - `curve: 'secp256k1' | 'x25519'` (default `secp256k1`)
 - `cipher: 'aes-256-gcm' | 'xchacha20'` (default `aes-256-gcm`)
 - `compressed: boolean` (default `false`)
+- `hkdfCompressed: boolean` (default `false`, secp256k1 only)
 - `nonceLength: 12 | 16` for AES-GCM (default `16`)
 
 ## Ciphertext format
 
 Hex-only transport:
 
-- `secp256k1`: `ephemeralPublicKey(33/65) || nonce || encryptedPayload`
-- `x25519`: `ephemeralPublicKey(32) || nonce || encryptedPayload`
+- `secp256k1`: `ephemeralPublicKey(33/65) || nonce || tag || ciphertext`
+- `x25519`: `ephemeralPublicKey(32) || nonce || tag || ciphertext`
 
-`encryptedPayload` includes the AEAD tag for both AES-GCM and XChaCha20-Poly1305.
+The transport and HKDF input (`senderPoint || sharedPoint`) match `ecies/js`.
 
 ## Migration note
 

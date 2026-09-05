@@ -540,7 +540,7 @@ async function doDecrypt() {
 
     try {
         const pt = await ECIES.decrypt(sec, ct, opts);
-        document.getElementById('decOut').value = new TextDecoder().decode(pt);
+        document.getElementById('decOut').value = pt;
         setStatus('✓ Decryption successful', true);
     } catch (e) {
         document.getElementById('decOut').value = '';

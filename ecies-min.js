@@ -23,7 +23,7 @@
   const SEC_GX = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n;
   const SEC_GY = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8n;
   const X25519_P = (1n << 255n) - 19n;
-  const X25519_A24 = 121666n;
+  const X25519_A24 = 121665n;
   const X25519_BASEPOINT = new Uint8Array(32);
   X25519_BASEPOINT[0] = 9;
   const MAX_TRANSPORT_BYTES = 16 * 1024 * 1024;
@@ -622,6 +622,7 @@
     const curve = options.curve || 'secp256k1';
     const cipher = options.cipher || 'aes-256-gcm';
     const compressed = options.compressed === true;
+    const hkdfCompressed = options.hkdfCompressed === true;
     const nonceLength = options.nonceLength == null ? 16 : options.nonceLength;
 
     if (curve !== 'secp256k1' && curve !== 'x25519') {
@@ -636,7 +637,7 @@
       throw new Error('nonceLength must be 12 or 16 for AES-GCM');
     }
 
-    return { curve, cipher, compressed, nonceLength };
+    return { curve, cipher, compressed, hkdfCompressed, nonceLength };
   }
 
   function parseSecpPrivateKeyHex(privateKeyHex) {
@@ -655,6 +656,21 @@
     if (!(bytes instanceof Uint8Array) || bytes.length !== len) {
       throw new Error(`${label} must be ${len} bytes`);
     }
+  }
+
+  async function deriveTransportKey(privateKeyHex, publicKeyHex, senderPublicKeyHex, options) {
+    const opts = normalizeOptions(options);
+    const shared = ECIES.ecdh(privateKeyHex, publicKeyHex, opts);
+    const sharedPoint = opts.curve === 'secp256k1'
+      ? secpSerializePublicKey(shared, opts.hkdfCompressed)
+      : shared.bytes;
+    const senderPoint = opts.curve === 'secp256k1'
+      ? secpSerializePublicKey(
+        secpParsePublicKey(hexToBytes(senderPublicKeyHex, 'sender public key')),
+        opts.hkdfCompressed,
+      )
+      : validateX25519PublicKey(hexToBytes(senderPublicKeyHex, 'sender public key'));
+    return hkdf(concatBytes(senderPoint, sharedPoint), 32);
   }
 
   class ECIES {
@@ -791,7 +807,12 @@
       }
 
       const ephemeral = ECIES.generateKeyPair(opts);
-      const key = await ECIES.deriveSharedSymmetricKey(ephemeral.privateKey, receiverPublicKeyHex, opts);
+      const key = await deriveTransportKey(
+        ephemeral.privateKey,
+        receiverPublicKeyHex,
+        ephemeral.publicKey,
+        opts,
+      );
       let nonce;
       let payload;
 
@@ -806,7 +827,8 @@
       const out = concatBytes(
         hexToBytes(ephemeral.publicKey, 'ephemeral public key'),
         nonce,
-        payload,
+        payload.slice(payload.length - 16),
+        payload.slice(0, payload.length - 16),
       );
       return bytesToHex(out);
     }
@@ -837,7 +859,9 @@
 
       const nonce = raw.slice(offset, offset + nonceLen);
       offset += nonceLen;
-      const payload = raw.slice(offset);
+      const tag = raw.slice(offset, offset + 16);
+      const ciphertext = raw.slice(offset + 16);
+      const payload = concatBytes(ciphertext, tag);
 
       return { ephemeralPublicKey, nonce, payload };
     }
@@ -851,8 +875,9 @@
       const opts = normalizeOptions(options);
       const parsed = ECIES.parseTransport(ciphertextHex, opts);
 
-      const key = await ECIES.deriveSharedSymmetricKey(
+      const key = await deriveTransportKey(
         receiverPrivateKeyHex,
+        bytesToHex(parsed.ephemeralPublicKey),
         bytesToHex(parsed.ephemeralPublicKey),
         opts,
       );

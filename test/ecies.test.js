@@ -97,6 +97,16 @@ test('decryptToBytes preserves arbitrary binary data', async () => {
   assert.deepEqual(Array.from(plaintext), Array.from(message));
 });
 
+test('deriveSharedSymmetricKey remains symmetric', async () => {
+  for (const curve of ECIES.CURVES) {
+    const alice = ECIES.generateKeyPair({ curve });
+    const bob = ECIES.generateKeyPair({ curve });
+    const aliceKey = await ECIES.deriveSharedSymmetricKey(alice.privateKey, bob.publicKey, { curve });
+    const bobKey = await ECIES.deriveSharedSymmetricKey(bob.privateKey, alice.publicKey, { curve });
+    assert.deepEqual(Array.from(aliceKey), Array.from(bobKey));
+  }
+});
+
 for (const hkdfCompressed of [false, true]) {
   test(`decrypts ecies/js-compatible AES transport (HKDF compressed=${hkdfCompressed})`, async () => {
     const options = {

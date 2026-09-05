@@ -658,6 +658,21 @@
     }
   }
 
+  async function deriveTransportKey(privateKeyHex, publicKeyHex, senderPublicKeyHex, options) {
+    const opts = normalizeOptions(options);
+    const shared = ECIES.ecdh(privateKeyHex, publicKeyHex, opts);
+    const sharedPoint = opts.curve === 'secp256k1'
+      ? secpSerializePublicKey(shared, opts.hkdfCompressed)
+      : shared.bytes;
+    const senderPoint = opts.curve === 'secp256k1'
+      ? secpSerializePublicKey(
+        secpParsePublicKey(hexToBytes(senderPublicKeyHex, 'sender public key')),
+        opts.hkdfCompressed,
+      )
+      : validateX25519PublicKey(hexToBytes(senderPublicKeyHex, 'sender public key'));
+    return hkdf(concatBytes(senderPoint, sharedPoint), 32);
+  }
+
   class ECIES {
     static get CURVES() {
       return ['secp256k1', 'x25519'];
@@ -773,24 +788,14 @@
       return { bytes: shared };
     }
 
-    static async deriveSharedSymmetricKey(privateKeyHex, publicKeyHex, options = {}, senderPublicKeyHex) {
+    static async deriveSharedSymmetricKey(privateKeyHex, publicKeyHex, options = {}) {
       const opts = normalizeOptions(options);
       const shared = ECIES.ecdh(privateKeyHex, publicKeyHex, opts);
       const sharedBytes = opts.curve === 'secp256k1'
-        ? secpSerializePublicKey(shared, opts.hkdfCompressed)
+        ? bigIntToBytesBE(shared.x, 32)
         : shared.bytes;
-      const senderPoint = senderPublicKeyHex == null
-        ? hexToBytes(ECIES.getPublicKey(privateKeyHex, {
-          ...opts,
-          compressed: opts.hkdfCompressed,
-        }), 'sender public key')
-        : (opts.curve === 'secp256k1'
-          ? secpSerializePublicKey(
-            secpParsePublicKey(hexToBytes(senderPublicKeyHex, 'sender public key')),
-            opts.hkdfCompressed,
-          )
-          : validateX25519PublicKey(hexToBytes(senderPublicKeyHex, 'sender public key')));
-      return hkdf(concatBytes(senderPoint, sharedBytes), 32);
+      const info = utf8ToBytes(`ecies-js:${opts.curve}:${opts.cipher}`);
+      return hkdf(sharedBytes, 32, { info });
     }
 
     static async encrypt(receiverPublicKeyHex, data, options = {}) {
@@ -802,7 +807,12 @@
       }
 
       const ephemeral = ECIES.generateKeyPair(opts);
-      const key = await ECIES.deriveSharedSymmetricKey(ephemeral.privateKey, receiverPublicKeyHex, opts);
+      const key = await deriveTransportKey(
+        ephemeral.privateKey,
+        receiverPublicKeyHex,
+        ephemeral.publicKey,
+        opts,
+      );
       let nonce;
       let payload;
 
@@ -865,11 +875,11 @@
       const opts = normalizeOptions(options);
       const parsed = ECIES.parseTransport(ciphertextHex, opts);
 
-      const key = await ECIES.deriveSharedSymmetricKey(
+      const key = await deriveTransportKey(
         receiverPrivateKeyHex,
         bytesToHex(parsed.ephemeralPublicKey),
-        opts,
         bytesToHex(parsed.ephemeralPublicKey),
+        opts,
       );
 
       let plain;

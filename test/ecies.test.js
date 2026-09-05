@@ -86,6 +86,13 @@ test('encrypt/decrypt bytes with AES-GCM nonceLength=12', async () => {
     nonceLength: 12,
   });
   assert.equal(dec, new TextDecoder().decode(msg));
+
+  const decBytes = await ECIES.decryptToBytes(recv.privateKey, ct, {
+    curve: 'x25519',
+    cipher: 'aes-256-gcm',
+    nonceLength: 12,
+  });
+  assert.deepEqual(Array.from(decBytes), Array.from(msg));
 });
 
 test('xchacha20 encrypt/decrypt and tamper detection', async () => {

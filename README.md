@@ -1,6 +1,6 @@
 # ecies-js (standalone single file)
 
-This repository provides one self-contained implementation file: `/home/runner/work/ecies-js/ecies-js/ecies-min.js`.
+This repository provides one self-contained implementation file: `./ecies-min.js`.
 
 - No runtime imports
 - No bundler/transpiler required

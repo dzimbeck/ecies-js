@@ -385,11 +385,13 @@
     const blocks = [];
     let prev = new Uint8Array(0);
     let counter = 1;
+    let produced = 0;
 
-    while (concatBytes(...blocks).length < length) {
+    while (produced < length) {
       const input = concatBytes(prev, info, Uint8Array.of(counter));
       prev = await hmacSha256(prk, input);
       blocks.push(prev);
+      produced += prev.length;
       counter += 1;
       if (counter > 255) throw new Error('hkdf block overflow');
     }
@@ -841,6 +843,11 @@
     }
 
     static async decrypt(receiverPrivateKeyHex, ciphertextHex, options = {}) {
+      const plain = await ECIES.decryptPayloadToBytes(receiverPrivateKeyHex, ciphertextHex, options);
+      return bytesToUtf8(plain);
+    }
+
+    static async decryptPayloadToBytes(receiverPrivateKeyHex, ciphertextHex, options = {}) {
       const opts = normalizeOptions(options);
       const parsed = ECIES.parseTransport(ciphertextHex, opts);
 
@@ -856,12 +863,11 @@
       } else {
         plain = xchacha20Poly1305Decrypt(key, parsed.nonce, parsed.payload);
       }
-      return bytesToUtf8(plain);
+      return plain;
     }
 
     static async decryptToBytes(receiverPrivateKeyHex, ciphertextHex, options = {}) {
-      const out = await ECIES.decrypt(receiverPrivateKeyHex, ciphertextHex, options);
-      return utf8ToBytes(out);
+      return ECIES.decryptPayloadToBytes(receiverPrivateKeyHex, ciphertextHex, options);
     }
 
     static constants() {

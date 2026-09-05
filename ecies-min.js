@@ -832,6 +832,7 @@
       const minLen = ephLen + nonceLen + 16;
       if (raw.length < minLen) throw new Error('ciphertext too short');
       const ephemeralPublicKey = raw.slice(offset, offset + ephLen);
+      if (opts.curve === 'x25519') validateX25519PublicKey(ephemeralPublicKey);
       offset += ephLen;
 
       const nonce = raw.slice(offset, offset + nonceLen);

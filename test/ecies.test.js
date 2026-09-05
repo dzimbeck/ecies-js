@@ -143,3 +143,17 @@ test('rejects invalid options and unsupported algorithms', async () => {
     /OperationError|short|decrypt|authentication/i,
   );
 });
+
+test('parseTransport rejects truncated ciphertext boundaries', () => {
+  const eph = '11'.repeat(32); // x25519 ephemeral public key
+  const nonce = '22'.repeat(12); // AES-GCM nonceLength=12
+  const onlyTag = '33'.repeat(16);
+  const validMin = `${eph}${nonce}${onlyTag}`;
+  assert.doesNotThrow(() => ECIES.parseTransport(validMin, { curve: 'x25519', cipher: 'aes-256-gcm', nonceLength: 12 }));
+
+  const truncated = `${eph}${nonce}${'44'.repeat(15)}`;
+  assert.throws(
+    () => ECIES.parseTransport(truncated, { curve: 'x25519', cipher: 'aes-256-gcm', nonceLength: 12 }),
+    /short/i,
+  );
+});

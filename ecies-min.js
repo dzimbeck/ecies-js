@@ -388,12 +388,12 @@
     let produced = 0;
 
     while (produced < length) {
+      if (counter > 255) throw new Error('hkdf block overflow');
       const input = concatBytes(prev, info, Uint8Array.of(counter));
       prev = await hmacSha256(prk, input);
       blocks.push(prev);
       produced += prev.length;
       counter += 1;
-      if (counter > 255) throw new Error('hkdf block overflow');
     }
     return concatBytes(...blocks).slice(0, length);
   }
@@ -828,12 +828,11 @@
         else throw new Error('invalid secp256k1 ephemeral key prefix');
       }
 
-      if (raw.length < ephLen + 16 + 12) throw new Error('ciphertext too short');
+      const nonceLen = opts.cipher === 'aes-256-gcm' ? opts.nonceLength : 24;
+      const minLen = ephLen + nonceLen + 16;
+      if (raw.length < minLen) throw new Error('ciphertext too short');
       const ephemeralPublicKey = raw.slice(offset, offset + ephLen);
       offset += ephLen;
-
-      const nonceLen = opts.cipher === 'aes-256-gcm' ? opts.nonceLength : 24;
-      if (raw.length < offset + nonceLen + 16) throw new Error('ciphertext too short for nonce/tag');
 
       const nonce = raw.slice(offset, offset + nonceLen);
       offset += nonceLen;

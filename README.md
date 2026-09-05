@@ -38,6 +38,7 @@ This repository provides one self-contained implementation file: `./ecies-min.js
 - `ecdh(privateKeyHex, publicKeyHex, options={}) -> {x,y,infinity} | {bytes}` (sync)
 - `encrypt(receiverPublicKeyHex, data, options={}) -> Promise<string>` (hex transport)
 - `decrypt(receiverPrivateKeyHex, ciphertextHex, options={}) -> Promise<string>`
+- `decryptToBytes(receiverPrivateKeyHex, ciphertextHex, options={}) -> Promise<Uint8Array>`
 
 Supported options:
 

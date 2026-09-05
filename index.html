@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ECIES Terminal</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+        font-family: 'Share Tech Mono', 'Courier New', monospace;
+        background: #1a1410;
+        color: #ffb347;
+        min-height: 100vh;
+        padding: 20px;
+        position: relative;
+        overflow-x: hidden;
+    }
+
+    /* CRT scanline effect */
+    body::before {
+        content: '';
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: repeating-linear-gradient(
+            0deg,
+            rgba(0, 0, 0, 0.15) 0px,
+            rgba(0, 0, 0, 0.15) 1px,
+            transparent 1px,
+            transparent 2px
+        );
+        pointer-events: none;
+        z-index: 9999;
+    }
+
+    /* CRT vignette */
+    body::after {
+        content: '';
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.4) 100%);
+        pointer-events: none;
+        z-index: 9998;
+    }
+
+    .container {
+        max-width: 900px;
+        margin: 0 auto;
+        position: relative;
+        z-index: 1;
+    }
+
+    h1 {
+        font-family: 'VT323', monospace;
+        font-size: 2.5em;
+        color: #ffd866;
+        text-shadow: 0 0 10px rgba(255, 216, 102, 0.6);
+        margin-bottom: 8px;
+        letter-spacing: 2px;
+    }
+
+    .subtitle {
+        color: #d4a574;
+        font-size: 0.9em;
+        margin-bottom: 20px;
+        opacity: 0.8;
+    }
+
+    .terminal-box {
+        background: #231c15;
+        border: 2px solid #ffb347;
+        border-radius: 4px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 0 15px rgba(255, 179, 71, 0.2), inset 0 0 30px rgba(255, 179, 71, 0.03);
+        position: relative;
+    }
+
+    .terminal-box::before {
+        content: '┌─ ' attr(data-title) ' ──────────────────────────────────────────────────────';
+        position: absolute;
+        top: -12px;
+        left: 10px;
+        background: #1a1410;
+        padding: 0 10px;
+        color: #ffb347;
+        font-size: 0.85em;
+        letter-spacing: 1px;
+    }
+
+    .terminal-box h2 {
+        font-family: 'VT323', monospace;
+        font-size: 1.4em;
+        color: #ffd866;
+        text-shadow: 0 0 8px rgba(255, 216, 102, 0.4);
+        margin-bottom: 15px;
+        margin-top: 10px;
+    }
+
+    label {
+        display: block;
+        color: #d4a574;
+        font-size: 0.85em;
+        margin-top: 12px;
+        margin-bottom: 4px;
+        letter-spacing: 1px;
+    }
+
+    label .hint {
+        color: #8b7355;
+        font-size: 0.9em;
+    }
+
+    input[type="text"], textarea, select {
+        width: 100%;
+        padding: 10px 12px;
+        background: #0f0d0a;
+        border: 1px solid #8b5a2b;
+        border-radius: 2px;
+        color: #ffb347;
+        font-family: 'Share Tech Mono', monospace;
+        font-size: 0.9em;
+        outline: none;
+        transition: all 0.2s;
+    }
+
+    input[type="text"]:focus, textarea:focus, select:focus {
+        border-color: #ffd866;
+        box-shadow: 0 0 8px rgba(255, 216, 102, 0.3);
+        background: #1a1410;
+    }
+
+    input[type="text"]::placeholder, textarea::placeholder {
+        color: #5c4033;
+    }
+
+    textarea {
+        resize: vertical;
+        min-height: 60px;
+    }
+
+    select {
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffb347' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        padding-right: 32px;
+    }
+
+    .btn-row {
+        display: flex;
+        gap: 8px;
+        margin: 12px 0;
+        flex-wrap: wrap;
+    }
+
+    button {
+        padding: 10px 20px;
+        background: transparent;
+        border: 2px solid #ffb347;
+        color: #ffb347;
+        font-family: 'VT323', monospace;
+        font-size: 1.1em;
+        letter-spacing: 2px;
+        cursor: pointer;
+        transition: all 0.15s;
+        text-transform: uppercase;
+    }
+
+    button:hover:not(:disabled) {
+        background: #ffb347;
+        color: #1a1410;
+        box-shadow: 0 0 15px rgba(255, 179, 71, 0.5);
+    }
+
+    button:active:not(:disabled) {
+        transform: scale(0.98);
+    }
+
+    button:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+
+    button.btn-warm {
+        border-color: #ff7b7b;
+        color: #ff7b7b;
+    }
+
+    button.btn-warm:hover:not(:disabled) {
+        background: #ff7b7b;
+        color: #1a0a0a;
+        box-shadow: 0 0 15px rgba(255, 123, 123, 0.5);
+    }
+
+    button.btn-small {
+        padding: 6px 12px;
+        font-size: 0.9em;
+    }
+
+    .options-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-bottom: 15px;
+    }
+
+    .option-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .status {
+        margin-top: 12px;
+        padding: 8px 12px;
+        border-radius: 2px;
+        font-size: 0.9em;
+        min-height: 1.5em;
+    }
+
+    .status.success {
+        color: #98c379;
+        border: 1px solid #5a7a4a;
+        background: rgba(152, 195, 121, 0.05);
+    }
+
+    .status.error {
+        color: #ff7b7b;
+        border: 1px solid #8b3a3a;
+        background: rgba(255, 123, 123, 0.05);
+    }
+
+    .key-display {
+        font-size: 0.75em;
+        word-break: break-all;
+        line-height: 1.4;
+    }
+
+    .info-box {
+        background: #1a1f2a;
+        border-color: #7ba7bc;
+    }
+
+    .info-box::before {
+        color: #7ba7bc;
+    }
+
+    .info-box p {
+        color: #a8c5d6;
+        line-height: 1.6;
+        font-size: 0.9em;
+    }
+
+    .info-box code {
+        background: #0f1a24;
+        padding: 2px 6px;
+        border-radius: 2px;
+        color: #7ba7bc;
+    }
+
+    .warning {
+        color: #ffa07a;
+        font-size: 0.85em;
+        margin-top: 8px;
+        padding: 8px;
+        border: 1px dashed #ffa07a;
+        background: rgba(255, 160, 122, 0.05);
+        display: none;
+    }
+
+    .warning.visible {
+        display: block;
+    }
+
+    @keyframes blink {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0; }
+    }
+
+    .cursor::after {
+        content: '█';
+        animation: blink 1s infinite;
+        color: #ffd866;
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h1>◈ ECIES TERMINAL ◈</h1>
+    <div class="subtitle">[ SECURE MESSAGING INTERFACE ] <span class="cursor"></span></div>
+
+    <!-- Configuration -->
+    <div class="terminal-box" data-title="CONFIGURATION">
+        <h2>▶ System Parameters</h2>
+        <div class="options-grid">
+            <div class="option-group">
+                <label for="cfgCurve">CURVE</label>
+                <select id="cfgCurve" onchange="updateUI()">
+                    <option value="secp256k1" selected>secp256k1</option>
+                    <option value="x25519">x25519 (Curve25519)</option>
+                </select>
+            </div>
+            <div class="option-group">
+                <label for="cfgCipher">CIPHER</label>
+                <select id="cfgCipher" onchange="updateUI()">
+                    <option value="aes-256-gcm" selected>AES-256-GCM</option>
+                    <option value="xchacha20">XChaCha20-Poly1305</option>
+                </select>
+            </div>
+            <div class="option-group">
+                <label for="cfgNonce">NONCE LENGTH <span class="hint">(AES only)</span></label>
+                <select id="cfgNonce" onchange="updateUI()">
+                    <option value="16" selected>16 bytes</option>
+                    <option value="12">12 bytes</option>
+                </select>
+            </div>
+            <div class="option-group">
+                <label for="cfgCompress">EPHEMERAL KEY <span class="hint">(secp256k1 only)</span></label>
+                <select id="cfgCompress" onchange="updateUI()">
+                    <option value="false" selected>Uncompressed (65B)</option>
+                    <option value="true">Compressed (33B)</option>
+                </select>
+            </div>
+            <div class="option-group">
+                <label for="cfgHkdf">HKDF INPUT <span class="hint">(secp256k1 only)</span></label>
+                <select id="cfgHkdf" onchange="updateUI()">
+                    <option value="false" selected>Uncompressed (130B)</option>
+                    <option value="true">Compressed (66B)</option>
+                </select>
+            </div>
+        </div>
+        <div class="warning" id="cfgWarning"></div>
+    </div>
+
+    <!-- Key Pair -->
+    <div class="terminal-box" data-title="KEY MANAGEMENT">
+        <h2>▶ Key Pair</h2>
+        <div class="btn-row">
+            <button onclick="generateKeys()">[ GENERATE ]</button>
+            <button onclick="clearKeys()" class="btn-warm btn-small">[ CLEAR ]</button>
+        </div>
+        <label for="pub">PUBLIC KEY <span class="hint" id="pubHint">(130 hex chars)</span></label>
+        <input type="text" id="pub" placeholder="04... or 02/03..." spellcheck="false">
+        <label for="sec">PRIVATE KEY <span class="hint">(64 hex chars)</span></label>
+        <input type="text" id="sec" placeholder="Enter or generate..." spellcheck="false">
+        <div class="btn-row">
+            <button onclick="derivePublicKey()" class="btn-small">[ DERIVE PUB FROM PRIV ]</button>
+        </div>
+    </div>
+
+    <!-- Encrypt -->
+    <div class="terminal-box" data-title="ENCRYPTION MODULE">
+        <h2>▶ Encrypt</h2>
+        <label for="encIn">PLAINTEXT INPUT</label>
+        <textarea id="encIn" placeholder="Enter message to encrypt...">Hello, ECIES!</textarea>
+        <div class="btn-row">
+            <button onclick="doEncrypt()" id="btnEncrypt">[ ENCRYPT ▶ ]</button>
+            <button onclick="copyToClipboard('encOut')" class="btn-small">[ COPY ]</button>
+        </div>
+        <label for="encOut">CIPHERTEXT OUTPUT <span class="hint">(hex)</span></label>
+        <textarea id="encOut" placeholder="—" readonly></textarea>
+    </div>
+
+    <!-- Decrypt -->
+    <div class="terminal-box" data-title="DECRYPTION MODULE">
+        <h2>▶ Decrypt</h2>
+        <label for="decIn">CIPHERTEXT INPUT <span class="hint">(hex)</span></label>
+        <textarea id="decIn" placeholder="Paste ciphertext here..." spellcheck="false"></textarea>
+        <div class="btn-row">
+            <button onclick="doDecrypt()" id="btnDecrypt">[ ◀ DECRYPT ]</button>
+            <button onclick="clearField('decIn')" class="btn-warm btn-small">[ CLEAR ]</button>
+        </div>
+        <label for="decOut">PLAINTEXT OUTPUT</label>
+        <textarea id="decOut" placeholder="—" readonly></textarea>
+        <div id="status" class="status"></div>
+    </div>
+
+    <!-- Info -->
+    <div class="terminal-box info-box" data-title="SYSTEM INFO">
+        <h2>▶ Technical Specifications</h2>
+        <p>
+            <strong>Protocol:</strong> ECIES (Elliptic Curve Integrated Encryption Scheme)<br>
+            <strong>Supported Curves:</strong> secp256k1, x25519<br>
+            <strong>Supported Ciphers:</strong> AES-256-GCM, XChaCha20-Poly1305<br>
+            <strong>KDF:</strong> HKDF-SHA256 over <code>senderPoint ‖ sharedPoint</code> (no salt)<br>
+            <strong>Ciphertext Format:</strong> <code>ephemeralPubKey ‖ nonce ‖ tag ‖ ciphertext</code><br>
+            <strong>Compatibility:</strong> Wire-compatible with eciesjs<br><br>
+            <strong style="color:#ffa07a;">Note:</strong> ed25519 is available in eciesjs but not implemented here.
+            Use x25519 for Curve25519 key exchange.
+        </p>
+    </div>
+</div>
+
+<script src="ecies-min.js"></script>
+<script>
+function getOptions() {
+    return {
+        curve: document.getElementById('cfgCurve').value,
+        cipher: document.getElementById('cfgCipher').value,
+        nonceLength: parseInt(document.getElementById('cfgNonce').value),
+        compressed: document.getElementById('cfgCompress').value === 'true',
+        hkdfCompressed: document.getElementById('cfgHkdf').value === 'true',
+    };
+}
+
+function updateUI() {
+    const opts = getOptions();
+    const warnings = [];
+
+    // Update public key hint
+    const pubHint = document.getElementById('pubHint');
+    if (opts.curve === 'secp256k1') {
+        pubHint.textContent = opts.compressed ? '(66 hex chars, compressed)' : '(130 hex chars, uncompressed)';
+    } else if (opts.curve === 'x25519') {
+        pubHint.textContent = '(64 hex chars)';
+    }
+
+    // Disable options that don't apply
+    document.getElementById('cfgCompress').disabled = opts.curve !== 'secp256k1';
+    document.getElementById('cfgHkdf').disabled = opts.curve !== 'secp256k1';
+    document.getElementById('cfgNonce').disabled = opts.cipher !== 'aes-256-gcm';
+
+    // Show warnings
+    if (opts.curve !== 'secp256k1') {
+        if (opts.compressed) warnings.push('Key compression only applies to secp256k1');
+        if (opts.hkdfCompressed) warnings.push('HKDF compression only applies to secp256k1');
+    }
+
+    const warningEl = document.getElementById('cfgWarning');
+    if (warnings.length > 0) {
+        warningEl.textContent = '⚠ ' + warnings.join(' | ');
+        warningEl.classList.add('visible');
+    } else {
+        warningEl.classList.remove('visible');
+    }
+}
+
+function setStatus(msg, ok) {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = 'status ' + (ok ? 'success' : 'error');
+}
+
+function generateKeys() {
+    const opts = getOptions();
+    try {
+        const kp = ECIES.generateKeyPair({ curve: opts.curve, compressed: opts.compressed });
+        document.getElementById('pub').value = kp.publicKey;
+        document.getElementById('sec').value = kp.privateKey;
+        document.getElementById('encOut').value = '';
+        document.getElementById('decOut').value = '';
+        setStatus('✓ Key pair generated', true);
+    } catch (e) {
+        setStatus('✗ ' + e.message, false);
+    }
+}
+
+function derivePublicKey() {
+    const sec = document.getElementById('sec').value.trim();
+    const opts = getOptions();
+    if (!sec) {
+        setStatus('✗ Enter a private key first', false);
+        return;
+    }
+    if (!/^[0-9a-fA-F]{64}$/.test(sec)) {
+        setStatus('✗ Invalid private key (must be 64 hex chars)', false);
+        return;
+    }
+    try {
+        const pub = ECIES.getPublicKey(sec, { curve: opts.curve, compressed: opts.compressed });
+        document.getElementById('pub').value = pub;
+        setStatus('✓ Public key derived', true);
+    } catch (e) {
+        setStatus('✗ ' + e.message, false);
+    }
+}
+
+function clearKeys() {
+    document.getElementById('pub').value = '';
+    document.getElementById('sec').value = '';
+    setStatus('');
+}
+
+function clearField(id) {
+    document.getElementById(id).value = '';
+    setStatus('');
+}
+
+function copyToClipboard(id) {
+    const text = document.getElementById(id).value;
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        setStatus('✓ Copied to clipboard', true);
+    }).catch(() => {
+        setStatus('✗ Copy failed', false);
+    });
+}
+
+async function doEncrypt() {
+    const pub = document.getElementById('pub').value.trim();
+    const input = document.getElementById('encIn').value;
+    const btn = document.getElementById('btnEncrypt');
+    const opts = getOptions();
+
+    if (!pub) { setStatus('✗ Public key required', false); return; }
+
+    btn.disabled = true;
+    btn.textContent = '[ PROCESSING... ]';
+    setStatus('');
+
+    try {
+        const ct = await ECIES.encrypt(pub, input, opts);
+        document.getElementById('encOut').value = ct;
+        document.getElementById('decIn').value = ct;
+        setStatus('✓ Encryption successful', true);
+    } catch (e) {
+        setStatus('✗ ' + e.message, false);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '[ ENCRYPT ▶ ]';
+    }
+}
+
+async function doDecrypt() {
+    const sec = document.getElementById('sec').value.trim();
+    const ct = document.getElementById('decIn').value.trim();
+    const btn = document.getElementById('btnDecrypt');
+    const opts = getOptions();
+
+    if (!sec) { setStatus('✗ Private key required', false); return; }
+    if (!ct) { setStatus('✗ No ciphertext', false); return; }
+
+    btn.disabled = true;
+    btn.textContent = '[ PROCESSING... ]';
+    setStatus('');
+
+    try {
+        const pt = await ECIES.decrypt(sec, ct, opts);
+        document.getElementById('decOut').value = new TextDecoder().decode(pt);
+        setStatus('✓ Decryption successful', true);
+    } catch (e) {
+        document.getElementById('decOut').value = '';
+        setStatus('✗ ' + e.message, false);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '[ ◀ DECRYPT ]';
+    }
+}
+
+// Initialize UI
+updateUI();
+</script>
+
+</body>
+</html>

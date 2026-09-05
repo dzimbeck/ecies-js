@@ -63,12 +63,7 @@ If you previously used older buggy XChaCha ciphertext encodings, do not assume c
 ## Security and limitations
 
 - ECIES encryption by itself does **not** authenticate sender identity.
+- For authentication one could also hash and sign/verify messages in production.
 - This implementation rejects unsupported curves/ciphers (for example `ed25519`).
 - JavaScript/BigInt operations are not guaranteed constant-time.
 - This repository does **not** claim this standalone port itself is audited.
-
-## Development
-
-```bash
-npm test
-```

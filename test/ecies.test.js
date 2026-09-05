@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCipheriv, createECDH, hkdfSync } from 'node:crypto';
-import { pathToFileURL } from 'node:url';
 import { ECIES } from '../ecies-min.js';
 
 function privateKey(value) {
@@ -37,11 +36,9 @@ function referenceCiphertext(message, options) {
   };
 }
 
-test('module loading exposes ECIES on globalThis', async () => {
-  delete globalThis.ECIES;
-  const mod = await import(pathToFileURL(new URL('../ecies-min.js', import.meta.url).pathname));
-  assert.equal(typeof mod.ECIES.encrypt, 'function');
-  assert.equal(globalThis.ECIES, mod.ECIES);
+test('module loading exposes ECIES on globalThis', () => {
+  assert.equal(typeof ECIES.encrypt, 'function');
+  assert.equal(globalThis.ECIES, ECIES);
 });
 
 test('RFC 7748 X25519 test vector', () => {

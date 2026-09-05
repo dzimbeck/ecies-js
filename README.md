@@ -1,16 +1,24 @@
 # ecies-js (standalone single file)
 
-This repository provides one self-contained implementation file: `./ecies-min.js`.
+This repository provides one top-level implementation file: `./ecies-min.js`.
 
-- No runtime imports
-- No bundler/transpiler required
-- Works as a plain browser script when Web Crypto is available
+- Uses vendored, pinned `@noble/curves` and `@noble/hashes` files committed in this repository
+- No package install from npm is required at runtime
+- Works in browsers via ES modules and an import map when Web Crypto is available
 
 ## Browser usage
 
 ```html
-<script src="./ecies-min.js"></script>
-<script>
+<script type="importmap">
+{
+  "imports": {
+    "@noble/curves/": "./node_modules/@noble/curves/esm/",
+    "@noble/hashes/": "./node_modules/@noble/hashes/esm/"
+  }
+}
+</script>
+<script type="module">
+  import { ECIES } from './ecies-min.js';
   (async () => {
     const receiver = ECIES.generateKeyPair({ curve: 'secp256k1' });
     const ciphertextHex = await ECIES.encrypt(receiver.publicKey, 'hello', {

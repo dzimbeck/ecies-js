@@ -395,8 +395,18 @@
     </div>
 </div>
 
-<script src="ecies-min.js"></script>
-<script>
+<script type="importmap">
+{
+  "imports": {
+    "@noble/curves/": "./node_modules/@noble/curves/esm/",
+    "@noble/hashes/": "./node_modules/@noble/hashes/esm/"
+  }
+}
+</script>
+<script type="module">
+import { ECIES } from './ecies-min.js';
+window.ECIES = ECIES;
+
 function getOptions() {
     return {
         curve: document.getElementById('cfgCurve').value,
@@ -553,6 +563,18 @@ async function doDecrypt() {
 
 // Initialize UI
 updateUI();
+Object.assign(window, {
+    getOptions,
+    updateUI,
+    setStatus,
+    generateKeys,
+    derivePublicKey,
+    clearKeys,
+    clearField,
+    copyToClipboard,
+    doEncrypt,
+    doDecrypt,
+});
 </script>
 
 </body>

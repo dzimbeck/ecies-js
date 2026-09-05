@@ -13,9 +13,9 @@
 
 ## This repository's approach
 
-The deliverable here is a single readable `ecies-min.js` file with no runtime imports.
-To satisfy that requirement, primitives needed by the `ECIES` API were consolidated into one file
-using standard algorithm formulations (SEC1/RFC7748/RFC5869/RFC8439/XChaCha draft/SP 800-38D).
+The top-level `ecies-min.js` wrapper now imports vendored, pinned copies of `@noble/curves`
+and `@noble/hashes` that are committed in this repository under `./node_modules/@noble/`.
+The remaining transport, framing, Web Crypto AES-GCM, and XChaCha20-Poly1305 glue stay local.
 
 ## Important audit-scope caveat
 

@@ -1,3 +1,9 @@
-node_modules/
+node_modules/*
+!node_modules/@noble/
+node_modules/@noble/*
+!node_modules/@noble/curves/
+!node_modules/@noble/hashes/
+!node_modules/@noble/curves/**
+!node_modules/@noble/hashes/**
 coverage/
 .DS_Store

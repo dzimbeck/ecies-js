@@ -1,13 +1,8 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const vm = require('node:vm');
-const {
-  createCipheriv,
-  createECDH,
-  hkdfSync,
-} = require('node:crypto');
-const { ECIES } = require('../ecies-min.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createCipheriv, createECDH, hkdfSync } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { ECIES } from '../ecies-min.js';
 
 function privateKey(value) {
   return value.toString(16).padStart(64, '0');
@@ -42,17 +37,11 @@ function referenceCiphertext(message, options) {
   };
 }
 
-test('browser-script loading exposes ECIES without imports', () => {
-  const source = fs.readFileSync(require.resolve('../ecies-min.js'), 'utf8');
-  const context = {
-    globalThis: {},
-    crypto: globalThis.crypto,
-    TextEncoder,
-    TextDecoder,
-  };
-  context.globalThis = context;
-  vm.runInNewContext(source, context, { filename: 'ecies-min.js' });
-  assert.equal(typeof context.ECIES.encrypt, 'function');
+test('module loading exposes ECIES on globalThis', async () => {
+  delete globalThis.ECIES;
+  const mod = await import(pathToFileURL(new URL('../ecies-min.js', import.meta.url).pathname));
+  assert.equal(typeof mod.ECIES.encrypt, 'function');
+  assert.equal(globalThis.ECIES, mod.ECIES);
 });
 
 test('RFC 7748 X25519 test vector', () => {

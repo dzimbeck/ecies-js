@@ -2,9 +2,9 @@
   "name": "ecies-js",
   "version": "0.1.0",
   "private": true,
-  "description": "Standalone single-file ECIES implementation",
+  "description": "Standalone ECIES wrapper over vendored noble primitives",
   "license": "MIT",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "test": "node --test"
   }

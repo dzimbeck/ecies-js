@@ -3,6 +3,8 @@
 This project is MIT-licensed and was prepared with API/behavior compatibility targets from:
 
 - ecies/js (MIT): https://github.com/ecies/js
+- @noble/curves (MIT): https://github.com/paulmillr/noble-curves
+- @noble/hashes (MIT): https://github.com/paulmillr/noble-hashes
 
 Cryptographic algorithm structures implemented in the standalone file are based on publicly
 specified standards and commonly used open implementations of:

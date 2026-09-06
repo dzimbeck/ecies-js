@@ -1,5 +1,7 @@
 # ecies-js (standalone single file)
 
+ecies-js is a pure JavaScript implementation of the Elliptic Curve Integrated Encryption Scheme (ECIES), offering simple encryption and decryption with Bitcoin- and Ethereum-style key pairs. Encrypt with a public key and decrypt with the matching private key—under the hood, a temporary key pair and elliptic-curve Diffie–Hellman derive a shared secret to encrypt the message.
+
 This repository provides two plain vanilla JS files (no modules, no bundler, no runtime imports):
 
 - `./ecies-min.js` — the readable ECIES implementation

@@ -14,6 +14,8 @@ When `noble-crypto.js` is loaded (script tag before `ecies-min.js`, or automatic
 constant-time algorithms. `ecies-min.js` still works standalone with its internal BigInt
 fallback (secp256k1/x25519 only, not constant-time).
 
+Try the live demo at: https://dzimbeck.github.io/ecies-js
+
 ## Browser usage
 
 ```html

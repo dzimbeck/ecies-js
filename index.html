@@ -302,6 +302,7 @@
                 <select id="cfgCurve" onchange="updateUI()">
                     <option value="secp256k1" selected>secp256k1</option>
                     <option value="x25519">x25519 (Curve25519)</option>
+                    <option value="ed25519">ed25519</option>
                 </select>
             </div>
             <div class="option-group">
@@ -384,17 +385,19 @@
         <h2>▶ Technical Specifications</h2>
         <p>
             <strong>Protocol:</strong> ECIES (Elliptic Curve Integrated Encryption Scheme)<br>
-            <strong>Supported Curves:</strong> secp256k1, x25519<br>
+            <strong>Supported Curves:</strong> secp256k1, x25519, ed25519<br>
             <strong>Supported Ciphers:</strong> AES-256-GCM, XChaCha20-Poly1305<br>
             <strong>KDF:</strong> HKDF-SHA256 over <code>senderPoint ‖ sharedPoint</code> (no salt)<br>
             <strong>Ciphertext Format:</strong> <code>ephemeralPubKey ‖ nonce ‖ tag ‖ ciphertext</code><br>
             <strong>Compatibility:</strong> Wire-compatible with eciesjs<br><br>
-            <strong style="color:#ffa07a;">Note:</strong> ed25519 is available in eciesjs but not implemented here.
-            Use x25519 for Curve25519 key exchange.
+            <strong style="color:#ffa07a;">Note:</strong> Elliptic-curve math is backed by the vendored
+            audited <code>noble-crypto.js</code> bundle (@noble/secp256k1, @noble/ed25519) for
+            constant-time hardened scalar multiplication.
         </p>
     </div>
 </div>
 
+<script src="noble-crypto.js"></script>
 <script src="ecies-min.js"></script>
 <script>
 function getOptions() {
@@ -415,7 +418,7 @@ function updateUI() {
     const pubHint = document.getElementById('pubHint');
     if (opts.curve === 'secp256k1') {
         pubHint.textContent = opts.compressed ? '(66 hex chars, compressed)' : '(130 hex chars, uncompressed)';
-    } else if (opts.curve === 'x25519') {
+    } else if (opts.curve === 'x25519' || opts.curve === 'ed25519') {
         pubHint.textContent = '(64 hex chars)';
     }
 

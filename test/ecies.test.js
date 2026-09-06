@@ -162,7 +162,32 @@ test('validates secp256k1 private keys and options', () => {
     () => ECIES.getPublicKey('00'.repeat(32), { curve: 'secp256k1' }),
     /1 <= d < n/,
   );
-  assert.throws(() => ECIES.generateKeyPair({ curve: 'ed25519' }), /unsupported curve/);
+  assert.throws(() => ECIES.generateKeyPair({ curve: 'p256' }), /unsupported curve/);
   assert.throws(() => ECIES.generateKeyPair({ cipher: 'aes-128-gcm' }), /unsupported cipher/);
   assert.throws(() => ECIES.generateKeyPair({ nonceLength: 8 }), /nonceLength/);
+});
+
+test('vendored noble bundle is loaded and backs secp256k1 math', () => {
+  const noble = ECIES.loadNoble();
+  assert.ok(noble && noble.secp256k1 && noble.ed25519, 'noble-crypto.js bundle should load');
+  // getPublicKey must agree with noble for a known scalar.
+  const priv = '00'.repeat(31) + '01';
+  assert.equal(
+    ECIES.getPublicKey(priv, { curve: 'secp256k1', compressed: true }),
+    ECIES.bytesToHex(noble.secp256k1.getPublicKey(ECIES.hexToBytes(priv), true)),
+  );
+});
+
+test('ed25519 keys, ecdh symmetry, and public key validation', () => {
+  const alice = ECIES.generateKeyPair({ curve: 'ed25519' });
+  const bob = ECIES.generateKeyPair({ curve: 'ed25519' });
+  assert.equal(alice.publicKey.length, 64);
+  assert.equal(ECIES.getPublicKey(alice.privateKey, { curve: 'ed25519' }), alice.publicKey);
+  const s1 = ECIES.ecdh(alice.privateKey, bob.publicKey, { curve: 'ed25519' }).bytes;
+  const s2 = ECIES.ecdh(bob.privateKey, alice.publicKey, { curve: 'ed25519' }).bytes;
+  assert.deepEqual(Array.from(s1), Array.from(s2));
+  assert.throws(
+    () => ECIES.ecdh(alice.privateKey, 'ff'.repeat(32), { curve: 'ed25519' }),
+    /./, // noble rejects invalid edwards25519 encodings
+  );
 });

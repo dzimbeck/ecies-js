@@ -11,7 +11,10 @@
  *   NIST SP 800-38D (AES-GCM), RFC 8439 and draft-irtf-cfrg-xchacha (XChaCha20-Poly1305).
  *
  * Security notice:
- * - JavaScript BigInt arithmetic and this implementation are NOT guaranteed constant-time.
+ * - When the vendored noble-crypto.js bundle (audited @noble/secp256k1 and @noble/ed25519)
+ *   is loaded, secp256k1/ed25519 scalar multiplication uses noble's hardened constant-time
+ *   algorithms. Without the bundle, the internal BigInt fallback is used, which is NOT
+ *   guaranteed constant-time (and ed25519 is unavailable).
  */
 
 (function initECIES(globalScope) {
@@ -41,6 +44,31 @@
       }
     }
     throw new Error('Web Crypto API is required');
+  }
+
+  let nobleCache;
+  function loadNoble() {
+    if (nobleCache !== undefined) return nobleCache;
+    nobleCache = null;
+    if (globalScope.nobleCrypto && globalScope.nobleCrypto.secp256k1 && globalScope.nobleCrypto.ed25519) {
+      nobleCache = globalScope.nobleCrypto;
+    } else if (typeof require === 'function') {
+      try {
+        const n = require('./noble-crypto.js');
+        if (n && n.secp256k1 && n.ed25519) nobleCache = n;
+      } catch (_) {
+        // Bundle not present; internal fallbacks are used.
+      }
+    }
+    return nobleCache;
+  }
+
+  function requireEd25519() {
+    const noble = loadNoble();
+    if (!noble) {
+      throw new Error('ed25519 requires the vendored noble-crypto.js bundle (load it before ecies-min.js)');
+    }
+    return noble.ed25519;
   }
 
   function textEncoder() {
@@ -249,6 +277,49 @@
       throw new Error('secp256k1 private key scalar must satisfy 1 <= d < n');
     }
     return num;
+  }
+
+  // Constant-time secp256k1 helpers: prefer the vendored audited noble implementation
+  // and only fall back to the variable-time BigInt math when the bundle is absent.
+  function secpPublicKeyBytes(privBigInt, compressed) {
+    const noble = loadNoble();
+    if (noble) {
+      return noble.secp256k1.getPublicKey(bigIntToBytesBE(privBigInt, 32), compressed === true);
+    }
+    return secpSerializePublicKey(secpScalarMult(privBigInt, secpBasePoint()), compressed === true);
+  }
+
+  function secpSharedPoint(privBigInt, pubPoint) {
+    const noble = loadNoble();
+    if (noble) {
+      const shared = noble.secp256k1.getSharedSecret(
+        bigIntToBytesBE(privBigInt, 32),
+        secpSerializePublicKey(pubPoint, true),
+        false,
+      );
+      return secpPoint(
+        bytesToBigIntBE(shared.slice(1, 33)),
+        bytesToBigIntBE(shared.slice(33, 65)),
+      );
+    }
+    const shared = secpScalarMult(privBigInt, pubPoint);
+    if (shared.infinity) throw new Error('secp256k1 shared point at infinity');
+    return shared;
+  }
+
+  function parseEd25519PrivateKeyHex(privateKeyHex) {
+    const bytes = hexToBytes(privateKeyHex, 'privateKeyHex');
+    if (bytes.length !== 32) throw new Error('ed25519 private key must be 32 bytes');
+    return bytes;
+  }
+
+  function validateEd25519PublicKey(pubBytes) {
+    if (!(pubBytes instanceof Uint8Array) || pubBytes.length !== 32) {
+      throw new Error('ed25519 public key must be 32 bytes');
+    }
+    const ed = requireEd25519();
+    ed.Point.fromBytes(pubBytes);
+    return new Uint8Array(pubBytes);
   }
 
   function secpParsePublicKey(pubBytes) {
@@ -625,7 +696,7 @@
     const hkdfCompressed = options.hkdfCompressed === true;
     const nonceLength = options.nonceLength == null ? 16 : options.nonceLength;
 
-    if (curve !== 'secp256k1' && curve !== 'x25519') {
+    if (curve !== 'secp256k1' && curve !== 'x25519' && curve !== 'ed25519') {
       throw new Error(`unsupported curve: ${String(curve)}`);
     }
     if (cipher !== 'aes-256-gcm' && cipher !== 'xchacha20') {
@@ -664,18 +735,23 @@
     const sharedPoint = opts.curve === 'secp256k1'
       ? secpSerializePublicKey(shared, opts.hkdfCompressed)
       : shared.bytes;
-    const senderPoint = opts.curve === 'secp256k1'
-      ? secpSerializePublicKey(
+    let senderPoint;
+    if (opts.curve === 'secp256k1') {
+      senderPoint = secpSerializePublicKey(
         secpParsePublicKey(hexToBytes(senderPublicKeyHex, 'sender public key')),
         opts.hkdfCompressed,
-      )
-      : validateX25519PublicKey(hexToBytes(senderPublicKeyHex, 'sender public key'));
+      );
+    } else if (opts.curve === 'ed25519') {
+      senderPoint = validateEd25519PublicKey(hexToBytes(senderPublicKeyHex, 'sender public key'));
+    } else {
+      senderPoint = validateX25519PublicKey(hexToBytes(senderPublicKeyHex, 'sender public key'));
+    }
     return hkdf(concatBytes(senderPoint, sharedPoint), 32);
   }
 
   class ECIES {
     static get CURVES() {
-      return ['secp256k1', 'x25519'];
+      return ['secp256k1', 'x25519', 'ed25519'];
     }
 
     static get CIPHERS() {
@@ -709,6 +785,8 @@
     static normalizeX25519U = normalizeX25519U;
     static x25519ScalarMult = x25519ScalarMult;
     static validateX25519PublicKey = validateX25519PublicKey;
+    static validateEd25519PublicKey = validateEd25519PublicKey;
+    static loadNoble = loadNoble;
 
     static hkdf = hkdf;
     static buildHkdf = buildHkdf;
@@ -738,10 +816,18 @@
           priv = bytesToBigIntBE(randomBytes(32));
         } while (priv === 0n || priv >= SEC_N);
 
-        const pubPoint = secpScalarMult(priv, secpBasePoint());
         return {
           privateKey: bytesToHex(bigIntToBytesBE(priv, 32)),
-          publicKey: bytesToHex(secpSerializePublicKey(pubPoint, opts.compressed)),
+          publicKey: bytesToHex(secpPublicKeyBytes(priv, opts.compressed)),
+        };
+      }
+
+      if (opts.curve === 'ed25519') {
+        const ed = requireEd25519();
+        const seed = randomBytes(32);
+        return {
+          privateKey: bytesToHex(seed),
+          publicKey: bytesToHex(ed.getPublicKey(seed)),
         };
       }
 
@@ -759,8 +845,12 @@
 
       if (opts.curve === 'secp256k1') {
         const d = parseSecpPrivateKeyHex(privateKeyHex);
-        const pubPoint = secpScalarMult(d, secpBasePoint());
-        return bytesToHex(secpSerializePublicKey(pubPoint, opts.compressed));
+        return bytesToHex(secpPublicKeyBytes(d, opts.compressed));
+      }
+
+      if (opts.curve === 'ed25519') {
+        const ed = requireEd25519();
+        return bytesToHex(ed.getPublicKey(parseEd25519PrivateKeyHex(privateKeyHex)));
       }
 
       const priv = clampX25519PrivateKey(parseX25519PrivateKeyHex(privateKeyHex));
@@ -775,9 +865,19 @@
       if (opts.curve === 'secp256k1') {
         const d = parseSecpPrivateKeyHex(privateKeyHex);
         const pubPoint = secpParsePublicKey(pubBytes);
-        const shared = secpScalarMult(d, pubPoint);
-        if (shared.infinity) throw new Error('secp256k1 shared point at infinity');
+        const shared = secpSharedPoint(d, pubPoint);
         return { x: shared.x, y: shared.y, infinity: false };
+      }
+
+      if (opts.curve === 'ed25519') {
+        // Matches upstream ecies/js: shared point = scalar(sk) * Point(pk) on edwards25519,
+        // where scalar(sk) is the clamped SHA-512 derived scalar of the 32-byte seed.
+        const ed = requireEd25519();
+        const priv = parseEd25519PrivateKeyHex(privateKeyHex);
+        const pub = validateEd25519PublicKey(pubBytes);
+        const scalar = ed.utils.getExtendedPublicKey(priv).scalar;
+        const shared = ed.Point.fromBytes(pub).multiply(scalar).toBytes();
+        return { bytes: new Uint8Array(shared) };
       }
 
       const priv = clampX25519PrivateKey(parseX25519PrivateKeyHex(privateKeyHex));
@@ -841,7 +941,7 @@
       let offset = 0;
       let ephLen;
 
-      if (opts.curve === 'x25519') {
+      if (opts.curve === 'x25519' || opts.curve === 'ed25519') {
         ephLen = 32;
       } else {
         const prefix = raw[0];
@@ -855,6 +955,7 @@
       if (raw.length < minLen) throw new Error('ciphertext too short');
       const ephemeralPublicKey = raw.slice(offset, offset + ephLen);
       if (opts.curve === 'x25519') validateX25519PublicKey(ephemeralPublicKey);
+      if (opts.curve === 'ed25519') validateEd25519PublicKey(ephemeralPublicKey);
       offset += ephLen;
 
       const nonce = raw.slice(offset, offset + nonceLen);
